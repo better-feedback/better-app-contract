@@ -1,0 +1,15 @@
+{
+  "name": "better-app-contract",
+  "version": "0.0.1",
+  "scripts": {
+    "clean": "rm -rf ./build && rm -rf ./neardev",
+    "build": "asb --target debug",
+    "deploy": "yarn build && near dev-deploy ./build/debug/contract.wasm",
+    "build:release": "asb",
+    "asp": "asp --verbose --nologo"
+  },
+  "keywords": [],
+  "devDependencies": {
+    "near-sdk-as": "3.2.3"
+  }
+}
