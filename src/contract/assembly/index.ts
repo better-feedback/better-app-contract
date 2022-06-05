@@ -5,16 +5,20 @@ import {
   u128,
   ContractPromiseBatch,
   env,
-  
+  PersistentVector,
 } from "near-sdk-as";
 
 //Models import
-import { Bounty, Auth } from "../models/models";
+import { Bounty } from "../models/models";
 
 /* Creating a new PersistentUnorderedMap with the key of type string and the value of type Bounty. 
    That stores all of the bounties in the contract.
 */
 const bounties = new PersistentUnorderedMap<u8, Bounty>("BN");
+let adminList = new PersistentUnorderedMap<string , string>("AL");
+
+adminList.set("aimensh.testnet", "aimensh.testnet");
+adminList.set("cc.testnet", "aimensh.testnet");
 
 /*
  * If the bounty is open, add the attached deposit to the pool and add the attached account to the
@@ -113,8 +117,7 @@ export function payoutBounty(
   assert(env.isValidAccountID(workerWallet), "Invalid worker wallet");
 
   //Making sure that the caller is an admin
-  const auth = new Auth();
-  assert(auth.isAdmin(Context.sender), "You are not an admin");
+  assertAdmin();
 
   const bounty = bounties.get(issueId);
 
@@ -150,4 +153,22 @@ export function payoutBounty(
 
 export function deleteBounty(issueId: u8): void {
   bounties.delete(issueId);
+}
+
+/*
+  If the sender is not in the admin list, then the function will throw an error
+ */
+function assertAdmin(): void {
+  const admin = adminList.get(Context.sender);
+  assert(admin, "Only admins are allowed to call this method");
+}
+
+export function addAdmin(admin: string): void {
+  assertAdmin();
+  adminList.set(admin, admin);
+}
+
+export function removeAdmin(admin: string): void {
+  assertAdmin();
+  adminList.delete(admin);
 }
