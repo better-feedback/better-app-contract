@@ -8,14 +8,14 @@ This is used to track a bounty for a particular issue.
 
 @nearBindgen
 export class Bounty {
-  issueId: u8;
+  issueId: string;
   pool: u128 = u128.Zero;
   funders: string[] = [];
   workers: string[] = [];
   status: string = "OPEN";
   deadline: string;
 
-  constructor(issueId: u8, deadline: string) {
+  constructor(issueId: string, deadline: string) {
     this.issueId = issueId;
     this.deadline = deadline;
   }
