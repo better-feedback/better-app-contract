@@ -1,9 +1,19 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.4;
+pragma solidity ^0.8.8;
 
-error NotAdmin();
+// Imports
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
-contract BetterBounty {
+error BetterBounty__NotAdmin();
+error BetterBounty__CannotPayoutZeroAddress();
+error BetterBounty__InvalidPercentage();
+error BetterBounty__NotFunds();
+error BetterBounty__NoBountyWithId();
+error BetterBounty__AlreadyWorking();
+
+contract BetterBounty is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     struct Bounty {
         string id;
         uint256 pool;
@@ -18,10 +28,18 @@ contract BetterBounty {
 
     uint256 public bountyCount;
 
-    //Adding contract creator to admins array
-    constructor() {
+    function initialize() public initializer {
+        //Adding contract creator to admins array
         adminAuth[msg.sender] = true;
+        __Ownable_init();
+        __UUPSUpgradeable_init();
     }
+
+    function _authorizeUpgrade(address newImplementation)
+        internal
+        override
+        onlyOwner
+    {}
 
     /*
      * If the bounty is open, add the attached deposit to the pool and add the attached account to the
@@ -34,7 +52,7 @@ contract BetterBounty {
         payable
     {
         //Validating sent funds
-        require(msg.value > 0, "You have to put some ETH to fund the bounty");
+        if (msg.value == 0) revert BetterBounty__NotFunds();
 
         Bounty memory bounty = bounties[_id];
 
@@ -80,20 +98,17 @@ contract BetterBounty {
      */
     function startWork(string memory _id) public {
         Bounty memory bounty = bounties[_id];
-        require(
-            keccak256(bytes(bounty.id)) != keccak256(bytes("")),
-            "Bounty with ID doesn not exist"
-        );
+        if (keccak256(bytes(bounty.id)) == keccak256(bytes("")))
+            revert BetterBounty__NoBountyWithId();
 
-        uint256 length = bounty.workers.length;
-
+        address[] memory workersFromMemory = bounty.workers;
+        uint256 length = workersFromMemory.length;
         if (length != 0) {
             // Preventing the same account from starting multiple work on the same bounty
             for (uint256 i; i < length; ++i) {
-                require(
-                    bounty.workers[i] != msg.sender,
-                    "You are already working on this issue"
-                );
+                if (workersFromMemory[i] == msg.sender) {
+                    revert BetterBounty__AlreadyWorking();
+                }
             }
         }
         bounties[_id].workers.push(msg.sender);
@@ -111,19 +126,19 @@ contract BetterBounty {
         address workerWallet,
         uint256 percentage
     ) public payable onlyAdmin {
-        require(
-            percentage >= 0 && percentage < 100,
-            "Percentage must be between 0 and 100"
-        );
+        if (workerWallet == address(0x0))
+            revert BetterBounty__CannotPayoutZeroAddress();
+
+        if (percentage < 0 || percentage > 100)
+            revert BetterBounty__InvalidPercentage();
+
         Bounty memory bounty = bounties[_id];
-        require(
-            keccak256(bytes(bounty.id)) != keccak256(bytes("")),
-            "Bounty with ID doesn not exist"
-        );
+        if (keccak256(bytes(bounty.id)) == keccak256(bytes("")))
+            revert BetterBounty__NoBountyWithId();
 
         uint256 amountToPayout = 0;
 
-        amountToPayout = calculatePercentage(percentage , bounty.pool);
+        amountToPayout = calculatePercentage(percentage, bounty.pool);
         bounties[_id].pool -= amountToPayout;
 
         payable(workerWallet).transfer(amountToPayout);
@@ -134,11 +149,13 @@ contract BetterBounty {
      * @param {string} _id - The id of the issue you want to get the bounty for.
      * @returns A bounty object
      */
-    function getBountyById(string memory _id) public view returns(Bounty memory){
+    function getBountyById(string memory _id)
+        public
+        view
+        returns (Bounty memory)
+    {
         return bounties[_id];
     }
-
-    
 
     /*
      *This function is used to calculate the payout for a bounty based on percetage
@@ -153,7 +170,7 @@ contract BetterBounty {
         returns (uint256)
     {
         uint256 newPercentage = percentage * 100;
-        uint256 payout = (pool / 10000) * newPercentage; 
+        uint256 payout = (pool / 10000) * newPercentage;
         return payout;
     }
 
@@ -171,7 +188,7 @@ contract BetterBounty {
 
     //Making sure only admins can call a certain function
     modifier onlyAdmin() {
-        if (!adminAuth[msg.sender]) require(false , "Only admins can call this method"); 
+        if (!adminAuth[msg.sender]) revert BetterBounty__NotAdmin();
         _;
     }
 }

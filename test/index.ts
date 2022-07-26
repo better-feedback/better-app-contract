@@ -37,7 +37,7 @@ describe("Better Bounty", function () {
     it("should revert if a eth not passed when adding a new bounty", async () => {
       await expect(
         bountyContract.fundBounty(bounty.id, bounty.deadline)
-      ).to.be.revertedWith("You have to put some ETH to fund the bounty");
+      ).to.be.revertedWith("BetterBounty__NotFunds()");
     });
 
     it("should be able to add a new bounty", async () => {
@@ -62,7 +62,7 @@ describe("Better Bounty", function () {
   describe("When user starts work", () => {
     it("should revert if bounty does not exist", async () => {
       await expect(bountyContract.startWork(bounty.id)).to.be.revertedWith(
-        "Bounty with ID doesn not exist"
+        "BetterBounty__NoBountyWithId()"
       );
     });
 
@@ -83,7 +83,7 @@ describe("Better Bounty", function () {
       await bountyContract.startWork(bounty.id);
 
       await expect(bountyContract.startWork(bounty.id)).to.revertedWith(
-        "You are already working on this issue"
+        "BetterBounty__AlreadyWorking()"
       );
     });
   });
@@ -91,7 +91,7 @@ describe("Better Bounty", function () {
     it("should revert if a regular user tries to call admin methods", async () => {
       await expect(
         bountyContract.connect(accounts[1]).addAdmin(accounts[1].address)
-      ).to.be.revertedWith("Only admins can call this method");
+      ).to.be.revertedWith("BetterBounty__NotAdmin()");
     });
 
     it("should be able to add an admin", async () => {
@@ -118,8 +118,19 @@ describe("Better Bounty", function () {
         bountyContract
           .connect(accounts[1])
           .payoutBounty(bounty.id, accounts[1].address, 25)
-      ).to.be.revertedWith("Only admins can call this method");
+      ).to.be.revertedWith("BetterBounty__NotAdmin()");
     });
+
+    it("Should revert if a zero address is passed into it", async () => {
+      await bountyContract.fundBounty(bounty.id, bounty.deadline, {
+        value: ethers.utils.parseEther("1"),
+      });
+
+      await expect(
+        bountyContract.payoutBounty(bounty.id, "0x0000000000000000000000000000000000000000", 25)
+      ).to.be.revertedWith("BetterBounty__CannotPayoutZeroAddress");
+    });
+
     it("should revert if percentage larger than 100", async () => {
       await bountyContract.fundBounty(bounty.id, bounty.deadline, {
         value: ethers.utils.parseEther("1"),
@@ -127,23 +138,24 @@ describe("Better Bounty", function () {
 
       await expect(
         bountyContract.payoutBounty(bounty.id, accounts[1].address, 105)
-      ).to.be.revertedWith("Percentage must be between 0 and 100");
+      ).to.be.revertedWith("BetterBounty__InvalidPercentage()");
     });
 
     it("should revert if a bounty does not exist", async () => {
       await expect(
         bountyContract.payoutBounty(bounty.id, accounts[1].address, 25)
-      ).to.be.revertedWith("Bounty with ID doesn not exist");
+      ).to.be.revertedWith("BetterBounty__NoBountyWithId()");
     });
-
 
     it("should be able to payout a bounty", async () => {
       await bountyContract.fundBounty(bounty.id, bounty.deadline, {
         value: ethers.utils.parseEther("1"),
       });
       await bountyContract.payoutBounty(bounty.id, accounts[1].address, 25);
-      expect(parseFloat(await accounts[1].getBalance()) > parseFloat(ethers.utils.parseEther("100.24").toString())).eq(true);
-    })
-
+      expect(
+        parseFloat(await accounts[1].getBalance()) >
+          parseFloat(ethers.utils.parseEther("100.24").toString())
+      ).eq(true);
+    });
   });
 });

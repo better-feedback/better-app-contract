@@ -1,17 +1,20 @@
-import { ethers } from "hardhat";
+import { ethers, upgrades } from "hardhat";
 import "dotenv/config";
 
 import * as betterBountyJson from "../artifacts/contracts/BetterBounty.sol/BetterBounty.json";
 
 async function main() {
-  
   const betterBountyContract = await ethers.getContractFactory("BetterBounty");
 
+  console.log("Deploying BetterBounty...");
 
-  const ballotContract = await betterBountyContract.deploy();
-  await ballotContract.deployed();
-  console.log(`Contract address: ${ballotContract.address}`);
+  const betterBounty = await upgrades.deployProxy(betterBountyContract, [], {
+    initializer: "initialize",
+  });
 
+  await betterBounty.deployed()
+
+  console.log(`Proxy Contract address: ${betterBounty.address}`);
 }
 
 main().catch((error) => {
