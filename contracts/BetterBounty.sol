@@ -66,7 +66,6 @@ contract BetterBounty is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             });
             bounties[_id] = newBounty;
             bounties[_id].funders.push(msg.sender);
-            bountyCount++;
         }
         //If bounty is open, attach the funds and add funder to funders list
         else {
