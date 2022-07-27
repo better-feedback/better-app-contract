@@ -26,7 +26,6 @@ contract BetterBounty is Initializable, OwnableUpgradeable, UUPSUpgradeable {
 
     mapping(address => bool) adminAuth;
 
-    uint256 public bountyCount;
 
     function initialize() public initializer {
         //Adding contract creator to admins array
