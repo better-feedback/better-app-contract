@@ -6,6 +6,8 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
+import "hardhat/console.sol";
+
 error BetterBounty__NotAdmin();
 error BetterBounty__CannotPayoutZeroAddress();
 error BetterBounty__InvalidPercentage();
@@ -18,8 +20,10 @@ error BetterBounty__NotAWorker();
 error BetterBounty__WorkerListEmpty();
 error BetterBounty__NotAdminProject();
 error BetterBounty__InvalidBountyId();
+error BetterBounty__NoFundsOnContract();
+error BetterBounty__NoFundsOnBounty();
 
-contract BetterBounty is Initializable, OwnableUpgradeable, UUPSUpgradeable {
+contract BetterBountyV2 {
     struct Bounty {
         string id;
         uint256 pool;
@@ -35,20 +39,26 @@ contract BetterBounty is Initializable, OwnableUpgradeable, UUPSUpgradeable {
 
     mapping(address => string) adminAuth;
 
+    uint256 public bountyCount;
+
     uint256 constant MAX_WORKERS = 30;
 
-    function initialize(string memory project) public initializer {
-        //Adding contract creator to admins array
-        adminAuth[msg.sender] = project;
-        __Ownable_init();
-        __UUPSUpgradeable_init();
-    }
+    // function initialize(string memory project) public initializer {
+    //     //Adding contract creator to admins array
+    //     adminAuth[msg.sender] = project;
+    //     __Ownable_init();
+    //     __UUPSUpgradeable_init();
+    // }
 
-    function _authorizeUpgrade(address newImplementation)
-        internal
-        override
-        onlyOwner
-    {}
+    // function _authorizeUpgrade(address newImplementation)
+    //     internal
+    //     override
+    //     onlyOwner
+    // {}
+
+    constructor(string memory project) {
+        adminAuth[msg.sender] = project;
+    }
 
     /*
      * If the bounty is open, add the attached deposit to the pool and add the attached account to the
@@ -84,9 +94,14 @@ contract BetterBounty is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             });
             bounties[_id] = newBounty;
             bounties[_id].funders.push(msg.sender);
+            bountyCount++;
         }
         //If bounty is open, attach the funds and add funder to funders list
         else {
+            if (block.timestamp > bounty.deadline) {
+                revert BetterBounty__BountyExpired();
+            }
+
             bounty.pool += msg.value;
 
             bool isNewFunder = true;
@@ -119,10 +134,6 @@ contract BetterBounty is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             revert BetterBounty__NoBountyWithId();
 
         if (block.timestamp > bounty.deadline) {
-            if (keccak256(bytes(bounty.status)) == keccak256(bytes("OPEN"))) {
-                bounty.status = "EXPIRED";
-                bounties[_id] = bounty;
-            }
             revert BetterBounty__BountyExpired();
         }
 
@@ -154,6 +165,9 @@ contract BetterBounty is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         address workerWallet,
         uint256 percentage
     ) public payable onlyAdmin {
+        if (address(this).balance == 0)
+            revert BetterBounty__NoFundsOnContract();
+
         if (workerWallet == address(0))
             revert BetterBounty__CannotPayoutZeroAddress();
 
@@ -168,8 +182,10 @@ contract BetterBounty is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             keccak256((bytes(bounty.project)))
         ) revert BetterBounty__NotAdminProject();
 
+        if (bounty.pool == 0) revert BetterBounty__NoFundsOnBounty();
+
         address[] memory workersFromMemory = bounty.workers;
-        
+
         if (workersFromMemory.length == 0)
             revert BetterBounty__WorkerListEmpty();
 
@@ -220,22 +236,28 @@ contract BetterBounty is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         return payout;
     }
 
-    function addAdmin(address _adminWallet, string memory project)
+    function addAdmin(address _adminWallet, string memory _project)
         public
         onlyAdmin
     {
-        adminAuth[_adminWallet] = project;
+        adminAuth[_adminWallet] = _project;
     }
 
-    function isAdmin(address _adminWallet) public view returns (string memory) {
-        return adminAuth[_adminWallet];
+    function isAdmin(address _adminWallet, string memory _project)
+        public
+        view
+        returns (bool)
+    {
+        return
+            keccak256(bytes(adminAuth[_adminWallet])) ==
+            keccak256(bytes(_project));
     }
 
-    function updateAdmin(address _adminWallet, string memory project)
+    function updateAdmin(address _adminWallet, string memory _project)
         public
         onlyAdmin
     {
-        adminAuth[_adminWallet] = project;
+        adminAuth[_adminWallet] = _project;
     }
 
     function removeAdmin(address _adminWallet) public onlyAdmin {
