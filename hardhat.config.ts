@@ -42,6 +42,10 @@ const config: HardhatUserConfig = {
   gasReporter: {
     enabled: true,
     currency: "USD",
+    coinmarketcap: process.env.COIN_MARKET,
+    token: "MATIC",
+    gasPriceApi:
+      "https://api.polygonscan.com/api?module=proxy&action=eth_gasPrice",
   },
   etherscan: {
     apiKey: {

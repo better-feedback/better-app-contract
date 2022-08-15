@@ -39,7 +39,7 @@ contract BetterBountyV2 {
 
     uint256 public bountyCount;
 
-    uint256 constant MAX_WORKERS = 10;
+    uint256 constant MAX_WORKERS = 30;
 
     // function initialize(string memory project) public initializer {
     //     //Adding contract creator to admins array

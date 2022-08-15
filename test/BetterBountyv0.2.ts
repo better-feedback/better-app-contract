@@ -4,7 +4,7 @@ import { ethers, network } from "hardhat";
 
 import { BetterBountyV2 } from "../typechain";
 
-describe("Better Bounty", function () {
+describe("Better Bounty V2", function () {
   let bountyContract: any;
   let accounts: any[] = [];
   const bounty = {
@@ -66,6 +66,11 @@ describe("Better Bounty", function () {
           value: ethers.utils.parseEther("1"),
         }
       );
+
+      const blockNumBefore = await ethers.provider.getBlockNumber();
+      const blockBefore = await ethers.provider.getBlock(blockNumBefore);
+      const timestampBefore = blockBefore.timestamp;
+
       await bountyContract.startWork(bounty.id);
 
       await expect(bountyContract.startWork(bounty.id)).to.revertedWith(
