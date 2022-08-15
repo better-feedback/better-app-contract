@@ -6,10 +6,15 @@
     "build": "asb --target debug",
     "deploy": "yarn build && near dev-deploy ./build/debug/contract.wasm",
     "build:release": "asb",
-    "asp": "asp --verbose --nologo"
+    "asp": "asp --verbose --nologo",
+    "test": "asp --verbose",
+    "test:ci": "asp --summary"
   },
   "keywords": [],
   "devDependencies": {
+    "@as-pect/cli": "^6.2.4",
+    "@types/mocha": "^9.1.1",
+    "mocha": "^10.0.0",
     "near-sdk-as": "^3.2.3"
   }
 }

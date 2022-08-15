@@ -5,7 +5,8 @@ import {
   u128,
   ContractPromiseBatch,
   env,
-  PersistentVector,
+  context,
+  logging,
 } from "near-sdk-as";
 
 //Models import
@@ -15,27 +16,37 @@ import { Bounty } from "../models/models";
    That stores all of the bounties in the contract.
 */
 const bounties = new PersistentUnorderedMap<string, Bounty>("BN");
-let adminList = new PersistentUnorderedMap<string , string>("AL");
+let adminList = new PersistentUnorderedMap<string, string>("AL");
 
+const MAX_WORKERS = 30;
 
 /*
  * If the bounty is open, add the attached deposit to the pool and add the attached account to the
  * funders array
  * @param {string} issueId - The ID of the issue that the bounty is attached to.
  */
-export function fundBounty(issueId: string, deadline: string): void {
+export function fundBounty(
+  issueId: string,
+  deadline: u64,
+  startedAt: u64,
+  project: string
+): void {
   assert(Context.attachedDeposit > u128.Zero, "Amount must be greater than 0");
+  assert(issueId != "", "Issue ID cannot be empty");
+
   const bounty = bounties.get(issueId);
 
   // If the bounty not found for an issue, create a new one
   if (bounty == null) {
-    const newBounty = new Bounty(issueId, deadline);
+    const newBounty = new Bounty(issueId, deadline, startedAt, project);
     newBounty.pool = u128.add(newBounty.pool, Context.attachedDeposit);
     newBounty.funders.push(Context.sender);
     bounties.set(issueId, newBounty);
   }
 
   if (bounty != null && bounty.status == "OPEN") {
+    assert((context.blockTimestamp / 1000000000) < u64(bounty.deadline) , "Bounty has expired");
+
     // Add the attached deposit to the pool
     bounty.pool = u128.add(bounty.pool, Context.attachedDeposit);
 
@@ -69,6 +80,18 @@ export function startWork(issueId: string): void {
   assert(bounty != null, "Bounty not found");
 
   if (bounty != null && bounty.status == "OPEN") {
+
+    logging.log((context.blockTimestamp / 1000000000))
+    logging.log((u64(bounty.deadline)))
+
+
+    assert((context.blockTimestamp / 1000000000) < u64(bounty.deadline) , "Bounty has expired");
+
+    assert(
+      bounty.workers.length < MAX_WORKERS,
+      "Max amount of workers for this bounty reached"
+    );
+
     for (let i = 0; i < bounty.workers.length; i++) {
       // Preventing the same account from starting multiple work on the same bounty
       if (bounty.workers[i] == Context.sender) {
@@ -110,33 +133,51 @@ export function getBountyByIssue(issueId: string): Bounty | null {
 export function payoutBounty(
   issueId: string,
   workerWallet: string,
-  percentage: i16
+  percentage: u16
 ): void {
-  assert(env.isValidAccountID(workerWallet), "Invalid worker wallet");
-
   //Making sure that the caller is an admin
   assertAdmin();
+
+  assert(env.isValidAccountID(workerWallet), "Invalid worker wallet");
+
+  assert(
+    context.accountBalance > u128.Zero,
+    "You don't have any NEAR to pay out"
+  );
 
   const bounty = bounties.get(issueId);
 
   //Making sure that the bounty exists
   assert(bounty != null, "Bounty not found");
 
-  if (percentage < 0 || percentage > 100) {
+  if (percentage > 100) {
     assert(false, "Percentage must be between 0 and 100");
   }
 
   if (bounty != null) {
-    let amountToPay = u128.Zero;
+    assert(
+      adminList.get(Context.sender) == bounty.project,
+      "Not an admin of this project"
+    );
+
+    assert(bounty.pool > u128.Zero, "Bounty pool is empty");
+
+    assert(bounty.workers.length > 0, "There are no workers to payout");
+
+    let isWokerFound = false;
+
+    for (let i = 0; i < bounty.workers.length; i++) {
+      if (bounty.workers[i] == workerWallet) {
+        isWokerFound = true;
+        break;
+      }
+    }
+
+    assert(isWokerFound, "Worker not found");
 
     //Calculating the amount to pay to the worker
-    if (percentage != 0) {
-      let divsion = parseFloat(percentage.toString()) / 100;
-
-      amountToPay = u128.div(bounty.pool, u128.fromF64(1 / divsion));
-    } else {
-      amountToPay = bounty.pool;
-    }
+    let divsion = parseFloat(percentage.toString()) / 100;
+    let amountToPay = u128.div(bounty.pool, u128.fromF64(1 / divsion));
 
     //Transfering the amount to the worker
     ContractPromiseBatch.create(workerWallet).transfer(amountToPay);
@@ -161,9 +202,9 @@ function assertAdmin(): void {
   assert(admin, "Only admins are allowed to call this method");
 }
 
-export function addAdmin(admin: string): void {
+export function addAdmin(admin: string, project: string): void {
   assertAdmin();
-  adminList.set(admin, admin);
+  adminList.set(admin, project);
 }
 
 export function removeAdmin(admin: string): void {
@@ -171,6 +212,18 @@ export function removeAdmin(admin: string): void {
   adminList.delete(admin);
 }
 
-export function viewAdmins() : string[]{
-  return adminList.values()
+export function isAdmin(admin: string): boolean {
+  return adminList.get(admin) != null;
+}
+
+export function updateAdmin(admin: string, project: string): void {
+  assertAdmin();
+
+  assert(isAdmin(admin), "Admin not found");
+
+  adminList.set(admin, project);
+}
+
+export function viewAdmins(): string[] {
+  return adminList.values();
 }
