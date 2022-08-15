@@ -6,8 +6,6 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
-import "hardhat/console.sol";
-
 error BetterBounty__NotAdmin();
 error BetterBounty__CannotPayoutZeroAddress();
 error BetterBounty__InvalidPercentage();
@@ -41,7 +39,7 @@ contract BetterBountyV2 {
 
     uint256 public bountyCount;
 
-    uint256 constant MAX_WORKERS = 30;
+    uint256 constant MAX_WORKERS = 10;
 
     // function initialize(string memory project) public initializer {
     //     //Adding contract creator to admins array
@@ -71,7 +69,7 @@ contract BetterBountyV2 {
         uint256 _deadline,
         uint256 _startedAt,
         string memory _project
-    ) public payable {
+    ) external payable {
         //Validating sent funds
         if (msg.value == 0) revert BetterBounty__NotFunds();
 
@@ -127,7 +125,7 @@ contract BetterBountyV2 {
      * If the bounty is open, add the sender to the list of workers.
      * @param {string} _id - The ID of the issue that you want to start working on.
      */
-    function startWork(string memory _id) public {
+    function startWork(string memory _id) external {
         Bounty memory bounty = bounties[_id];
 
         if (keccak256(bytes(bounty.id)) == keccak256(bytes("")))
@@ -164,7 +162,7 @@ contract BetterBountyV2 {
         string memory _id,
         address workerWallet,
         uint256 percentage
-    ) public payable onlyAdmin {
+    ) external payable onlyAdmin {
         if (address(this).balance == 0)
             revert BetterBounty__NoFundsOnContract();
 
@@ -212,7 +210,7 @@ contract BetterBountyV2 {
      * @returns A bounty object
      */
     function getBountyById(string memory _id)
-        public
+        external
         view
         returns (Bounty memory)
     {
@@ -232,19 +230,19 @@ contract BetterBountyV2 {
         returns (uint256)
     {
         uint256 newPercentage = percentage * 100;
-        uint256 payout = (pool / 10000) * newPercentage;
+        uint256 payout = (pool * newPercentage) / 10000;
         return payout;
     }
 
     function addAdmin(address _adminWallet, string memory _project)
-        public
+        external
         onlyAdmin
     {
         adminAuth[_adminWallet] = _project;
     }
 
     function isAdmin(address _adminWallet, string memory _project)
-        public
+        external
         view
         returns (bool)
     {
@@ -254,13 +252,13 @@ contract BetterBountyV2 {
     }
 
     function updateAdmin(address _adminWallet, string memory _project)
-        public
+        external
         onlyAdmin
     {
         adminAuth[_adminWallet] = _project;
     }
 
-    function removeAdmin(address _adminWallet) public onlyAdmin {
+    function removeAdmin(address _adminWallet) external onlyAdmin {
         adminAuth[_adminWallet] = "";
     }
 
