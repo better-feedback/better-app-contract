@@ -17,6 +17,7 @@ async function main() {
     betterBountyContract,
     {
       kind: "uups",
+      unsafeAllowCustomTypes: true,
     }
   );
 
