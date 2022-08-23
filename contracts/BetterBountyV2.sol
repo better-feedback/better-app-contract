@@ -39,13 +39,16 @@ contract BetterBountyV2 is
         string project;
     }
 
+    // V0.1 VARIABLES
     mapping(string => Bounty) bounties;
-
     mapping(address => string) adminAuth;
 
+    // V0.2 VARIABLES
     uint256 public bountyCount;
-
     uint256 private maxWorkers = 30;
+
+    // V0.3 VARIABLES APPEND HERE
+
 
     function initialize(string memory project) public initializer {
         //Adding contract creator to admins array
@@ -244,7 +247,7 @@ contract BetterBountyV2 is
         uint256 payout = (pool * newPercentage) / 10000;
         return payout;
     }
-    
+
     function getMaxWorkers() external view returns (uint256) {
         return maxWorkers;
     }
