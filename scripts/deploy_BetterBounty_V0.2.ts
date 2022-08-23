@@ -8,10 +8,15 @@ async function main() {
 
   console.log("Deploying BetterBounty...");
 
-  const betterBounty = await upgrades.deployProxy(betterBountyContract, [], {
-    initializer: "initialize",
-    kind: "uups",   
-  });
+  const proxyAddress = process.env.PROXY_ADDRESS;
+
+  const betterBounty = await upgrades.upgradeProxy(
+    proxyAddress as string,
+    betterBountyContract,
+    {
+      kind: "uups",
+    }
+  );
 
   await betterBounty.deployed();
 

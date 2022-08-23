@@ -21,7 +21,7 @@ error BetterBounty__InvalidBountyId();
 error BetterBounty__NoFundsOnContract();
 error BetterBounty__NoFundsOnBounty();
 
-contract BetterBountyV2 {
+contract BetterBountyV2NonUpgradable {
     struct Bounty {
         string id;
         uint256 pool;

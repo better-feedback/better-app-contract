@@ -4,12 +4,12 @@ import { ethers, network } from "hardhat";
 
 import { BetterBountyV2 } from "../typechain";
 
-describe("Better Bounty V2", function () {
+describe("Better Bounty V2 Non Upgradable", function () {
   let bountyContract: any;
   let accounts: any[] = [];
   const bounty = {
     id: "https://github.com/better-feedback/better-app/issues/45",
-    deadline: 1660849993,
+    deadline: 1661325587,
     startedAt: 1660491541,
     project: "betterhq",
   };
@@ -17,7 +17,7 @@ describe("Better Bounty V2", function () {
   // Deploying a new contract for each test case
   beforeEach(async () => {
     accounts = await ethers.getSigners();
-    const bountyFactory = await ethers.getContractFactory("BetterBountyV2");
+    const bountyFactory = await ethers.getContractFactory("BetterBountyV2NonUpgradable");
 
     bountyContract = await bountyFactory.deploy("betterhq");
     await bountyContract.deployed();

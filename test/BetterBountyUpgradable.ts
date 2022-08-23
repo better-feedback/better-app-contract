@@ -1,10 +1,10 @@
 import { expect } from "chai";
 import { Contract } from "ethers";
-import { ethers } from "hardhat";
+import { ethers, upgrades } from "hardhat";
 
-import { BetterBounty } from "../typechain";
+import { BetterBounty, BetterBounty__factory } from "../typechain";
 
-describe("Better Bounty V1 non upgradable", function () {
+describe("Better Bounty V1 (Proxy)", function () {
   let bountyContract: any;
   let accounts: any[] = [];
   const bounty = {
@@ -15,9 +15,12 @@ describe("Better Bounty V1 non upgradable", function () {
   // Deploying a new contract for each test case
   beforeEach(async () => {
     accounts = await ethers.getSigners();
-    const bountyFactory = await ethers.getContractFactory("BetterBountyNonUpgradable");
+    const bountyFactory = await ethers.getContractFactory("BetterBounty");
 
-    bountyContract = await bountyFactory.deploy();
+    bountyContract = await upgrades.deployProxy(bountyFactory, [], {
+      initializer: "initialize",
+      kind: "uups",
+    });
     await bountyContract.deployed();
   });
 
@@ -136,14 +139,15 @@ describe("Better Bounty V1 non upgradable", function () {
       ).to.be.revertedWith("Bounty with ID doesn not exist");
     });
 
-
     it("should be able to payout a bounty", async () => {
       await bountyContract.fundBounty(bounty.id, bounty.deadline, {
         value: ethers.utils.parseEther("1"),
       });
       await bountyContract.payoutBounty(bounty.id, accounts[1].address, 25);
-      expect(parseFloat(await accounts[1].getBalance()) > parseFloat(ethers.utils.parseEther("100.24").toString())).eq(true);
-    })
-
+      expect(
+        parseFloat(await accounts[1].getBalance()) >
+          parseFloat(ethers.utils.parseEther("100.24").toString())
+      ).eq(true);
+    });
   });
 });
