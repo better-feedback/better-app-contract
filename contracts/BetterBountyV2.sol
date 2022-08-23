@@ -45,7 +45,7 @@ contract BetterBountyV2 is
 
     uint256 public bountyCount;
 
-    uint256 constant MAX_WORKERS = 30;
+    uint256 private maxWorkers = 30;
 
     function initialize(string memory project) public initializer {
         //Adding contract creator to admins array
@@ -146,7 +146,7 @@ contract BetterBountyV2 is
             revert BetterBounty__BountyExpired();
         }
 
-        if (bounty.workers.length == MAX_WORKERS)
+        if (bounty.workers.length == maxWorkers)
             revert BetterBounty__MaxWorkersReached();
 
         address[] memory workersFromMemory = bounty.workers;
@@ -244,6 +244,14 @@ contract BetterBountyV2 is
         uint256 payout = (pool * newPercentage) / 10000;
         return payout;
     }
+    
+    function getMaxWorkers() external view returns (uint256) {
+        return maxWorkers;
+    }
+
+    function setMaxWorkers(uint256 _maxWorkers) external onlyAdmin {
+        maxWorkers = _maxWorkers;
+    }
 
     function addAdmin(address _adminWallet, string memory _project)
         external
@@ -279,43 +287,4 @@ contract BetterBountyV2 is
             revert BetterBounty__NotAdmin();
         _;
     }
-}
-
-pragma solidity ^0.8.4;
-
-import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-
-contract MyContract is
-    Initializable,
-    PausableUpgradeable,
-    OwnableUpgradeable,
-    UUPSUpgradeable
-{
-    /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() {
-        _disableInitializers();
-    }
-
-    function initialize() public initializer {
-        __Pausable_init();
-        __Ownable_init();
-        __UUPSUpgradeable_init();
-    }
-
-    function pause() public onlyOwner {
-        _pause();
-    }
-
-    function unpause() public onlyOwner {
-        _unpause();
-    }
-
-    function _authorizeUpgrade(address newImplementation)
-        internal
-        override
-        onlyOwner
-    {}
 }
