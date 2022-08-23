@@ -45,14 +45,15 @@ contract BetterBountyV2 is
 
     // V0.2 VARIABLES
     uint256 public bountyCount;
-    uint256 private maxWorkers = 30;
+    uint256 private maxWorkers;
 
     // V0.3 VARIABLES APPEND HERE
 
 
-    function initialize(string memory project) public initializer {
+    function initialize() public initializer {
         //Adding contract creator to admins array
-        adminAuth[msg.sender] = project;
+        adminAuth[msg.sender] = "betterhq";
+        maxWorkers = 30;
         __Pausable_init();
         __Ownable_init();
         __UUPSUpgradeable_init();
