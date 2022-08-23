@@ -4,7 +4,7 @@ import "dotenv/config";
 import * as betterBountyJson from "../artifacts/contracts/BetterBounty.sol/BetterBounty.json";
 
 async function main() {
-  const betterBountyContract = await ethers.getContractFactory("BetterBounty");
+  const betterBountyContract = await ethers.getContractFactory("BetterBountyV2");
 
   console.log("Deploying BetterBounty...");
 
