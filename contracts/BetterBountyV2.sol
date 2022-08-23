@@ -5,7 +5,6 @@ pragma solidity ^0.8.8;
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 
 error BetterBounty__NotAdmin();
 error BetterBounty__CannotPayoutZeroAddress();
@@ -25,8 +24,7 @@ error BetterBounty__NoFundsOnBounty();
 contract BetterBountyV2 is
     Initializable,
     OwnableUpgradeable,
-    UUPSUpgradeable,
-    PausableUpgradeable
+    UUPSUpgradeable
 {
     struct Bounty {
         string id;
@@ -54,17 +52,8 @@ contract BetterBountyV2 is
         //Adding contract creator to admins array
         adminAuth[msg.sender] = "betterhq";
         maxWorkers = 30;
-        __Pausable_init();
         __Ownable_init();
         __UUPSUpgradeable_init();
-    }
-
-    function pause() public onlyOwner {
-        _pause();
-    }
-
-    function unpause() public onlyOwner {
-        _unpause();
     }
 
     function _authorizeUpgrade(address newImplementation)
