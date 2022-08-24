@@ -5,6 +5,7 @@ pragma solidity ^0.8.8;
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 
 error BetterBounty__NotAdmin();
 error BetterBounty__CannotPayoutZeroAddress();
@@ -12,26 +13,57 @@ error BetterBounty__InvalidPercentage();
 error BetterBounty__NotFunds();
 error BetterBounty__NoBountyWithId();
 error BetterBounty__AlreadyWorking();
+error BetterBounty__MaxWorkersReached();
+error BetterBounty__BountyExpired();
+error BetterBounty__NotAWorker();
+error BetterBounty__WorkerListEmpty();
+error BetterBounty__NotAdminProject();
+error BetterBounty__InvalidBountyId();
+error BetterBounty__NoFundsOnContract();
+error BetterBounty__NoFundsOnBounty();
+error BetterBounty__BountyHasNotExpiredYet();
+error BetterBounty__BountyHasBeenClosed();
 
-contract BetterBounty is Initializable, OwnableUpgradeable, UUPSUpgradeable {
+contract BetterBounty is
+    Initializable,
+    OwnableUpgradeable,
+    UUPSUpgradeable,
+    PausableUpgradeable
+{
     struct Bounty {
         string id;
         uint256 pool;
         address[] funders;
         address[] workers;
-        string deadline;
+        uint256 deadline;
+        uint256 startedAt;
+        string status;
+        string project;
     }
 
     mapping(string => Bounty) bounties;
+    mapping(address => string) adminAuth;
 
-    mapping(address => bool) adminAuth;
+    string[] public bountyIds;
 
+    uint256 public bountyCount;
+    uint256 private maxWorkers;
 
     function initialize() public initializer {
         //Adding contract creator to admins array
-        adminAuth[msg.sender] = true;
+        adminAuth[msg.sender] = "betterhq";
+        maxWorkers = 30;
         __Ownable_init();
+        __Pausable_init();
         __UUPSUpgradeable_init();
+    }
+
+    function pause() public onlyOwner {
+        _pause();
+    }
+
+    function unpause() public onlyOwner {
+        _unpause();
     }
 
     function _authorizeUpgrade(address newImplementation)
@@ -46,12 +78,17 @@ contract BetterBounty is Initializable, OwnableUpgradeable, UUPSUpgradeable {
      * @param {string} _id - The ID of the issue that the bounty is attached to.
      * @param {string} _deadline - The deadline for the bounty , set by the first funder
      */
-    function fundBounty(string memory _id, string memory _deadline)
-        public
-        payable
-    {
+    function fundBounty(
+        string memory _id,
+        uint256 _deadline,
+        uint256 _startedAt,
+        string memory _project
+    ) external payable {
         //Validating sent funds
         if (msg.value == 0) revert BetterBounty__NotFunds();
+
+        if (keccak256(bytes(_id)) == keccak256(bytes("")))
+            revert BetterBounty__InvalidBountyId();
 
         Bounty memory bounty = bounties[_id];
 
@@ -62,13 +99,25 @@ contract BetterBounty is Initializable, OwnableUpgradeable, UUPSUpgradeable {
                 pool: msg.value,
                 funders: new address[](0),
                 workers: new address[](0),
-                deadline: _deadline
+                deadline: _deadline,
+                startedAt: _startedAt,
+                status: "OPEN",
+                project: _project
             });
             bounties[_id] = newBounty;
             bounties[_id].funders.push(msg.sender);
+            bountyIds.push(_id);
+            bountyCount++;
         }
         //If bounty is open, attach the funds and add funder to funders list
         else {
+            if (keccak256(bytes(bounty.status)) == keccak256(bytes("CLOSED")))
+                revert BetterBounty__BountyHasBeenClosed();
+
+            if (block.timestamp > bounty.deadline) {
+                revert BetterBounty__BountyExpired();
+            }
+
             bounty.pool += msg.value;
 
             bool isNewFunder = true;
@@ -94,10 +143,21 @@ contract BetterBounty is Initializable, OwnableUpgradeable, UUPSUpgradeable {
      * If the bounty is open, add the sender to the list of workers.
      * @param {string} _id - The ID of the issue that you want to start working on.
      */
-    function startWork(string memory _id) public {
+    function startWork(string memory _id) external {
         Bounty memory bounty = bounties[_id];
+
         if (keccak256(bytes(bounty.id)) == keccak256(bytes("")))
             revert BetterBounty__NoBountyWithId();
+
+        if (keccak256(bytes(bounty.status)) == keccak256(bytes("CLOSED")))
+            revert BetterBounty__BountyHasBeenClosed();
+
+        if (block.timestamp > bounty.deadline) {
+            revert BetterBounty__BountyExpired();
+        }
+
+        if (bounty.workers.length == maxWorkers)
+            revert BetterBounty__MaxWorkersReached();
 
         address[] memory workersFromMemory = bounty.workers;
         uint256 length = workersFromMemory.length;
@@ -123,20 +183,43 @@ contract BetterBounty is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         string memory _id,
         address workerWallet,
         uint256 percentage
-    ) public payable onlyAdmin {
-        if (workerWallet == address(0x0))
+    ) external payable onlyAdmin {
+        if (address(this).balance == 0)
+            revert BetterBounty__NoFundsOnContract();
+
+        if (workerWallet == address(0))
             revert BetterBounty__CannotPayoutZeroAddress();
 
-        if (percentage < 0 || percentage > 100)
-            revert BetterBounty__InvalidPercentage();
+        if (percentage > 100) revert BetterBounty__InvalidPercentage();
 
         Bounty memory bounty = bounties[_id];
         if (keccak256(bytes(bounty.id)) == keccak256(bytes("")))
             revert BetterBounty__NoBountyWithId();
 
-        uint256 amountToPayout = 0;
+        if (
+            keccak256((bytes(adminAuth[msg.sender]))) !=
+            keccak256((bytes(bounty.project)))
+        ) revert BetterBounty__NotAdminProject();
 
-        amountToPayout = calculatePercentage(percentage, bounty.pool);
+        if (bounty.pool == 0) revert BetterBounty__NoFundsOnBounty();
+
+        address[] memory workersFromMemory = bounty.workers;
+
+        if (workersFromMemory.length == 0)
+            revert BetterBounty__WorkerListEmpty();
+
+        bool isWorkerInList;
+
+        for (uint256 i; i < workersFromMemory.length; ++i) {
+            if (workersFromMemory[i] == workerWallet) {
+                isWorkerInList = true;
+                break;
+            }
+        }
+
+        if (!isWorkerInList) revert BetterBounty__NotAWorker();
+
+        uint256 amountToPayout = calculatePercentage(percentage, bounty.pool);
         bounties[_id].pool -= amountToPayout;
 
         payable(workerWallet).transfer(amountToPayout);
@@ -148,7 +231,7 @@ contract BetterBounty is Initializable, OwnableUpgradeable, UUPSUpgradeable {
      * @returns A bounty object
      */
     function getBountyById(string memory _id)
-        public
+        external
         view
         returns (Bounty memory)
     {
@@ -168,25 +251,79 @@ contract BetterBounty is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         returns (uint256)
     {
         uint256 newPercentage = percentage * 100;
-        uint256 payout = (pool / 10000) * newPercentage;
+        uint256 payout = (pool * newPercentage) / 10000;
         return payout;
     }
 
-    function addAdmin(address _adminWallet) public onlyAdmin {
-        adminAuth[_adminWallet] = true;
+    function getMaxWorkers() external view returns (uint256) {
+        return maxWorkers;
     }
 
-    function isAdmin(address _adminWallet) public view returns (bool) {
-        return adminAuth[_adminWallet];
+    function setMaxWorkers(uint256 _maxWorkers) external onlyAdmin {
+        maxWorkers = _maxWorkers;
     }
 
-    function removeAdmin(address _adminWallet) public onlyAdmin {
-        adminAuth[_adminWallet] = false;
+    function getBountyIds() external view returns (string[] memory) {
+        return bountyIds;
+    }
+
+    function closeBounty(string memory _id) external onlyAdmin {
+        Bounty memory bounty = bounties[_id];
+        if (keccak256(bytes(bounty.id)) == keccak256(bytes("")))
+            revert BetterBounty__NoBountyWithId();
+
+        if (
+            keccak256((bytes(adminAuth[msg.sender]))) !=
+            keccak256((bytes(bounty.project)))
+        ) revert BetterBounty__NotAdminProject();
+
+        bounties[_id].status = "CLOSED";
+    }
+
+    function addAdmin(address _adminWallet, string memory _project)
+        external
+        onlyAdmin
+    {
+        adminAuth[_adminWallet] = _project;
+    }
+
+    function expireBounty(string memory _id) external onlyAdmin {
+        Bounty memory bounty = bounties[_id];
+        if (keccak256(bytes(bounty.id)) == keccak256(bytes("")))
+            revert BetterBounty__NoBountyWithId();
+
+        if (block.timestamp < bounty.deadline) {
+            revert BetterBounty__BountyHasNotExpiredYet();
+        }
+
+        bounties[_id].status = "EXPIRED";
+    }
+
+    function isAdmin(address _adminWallet, string memory _project)
+        external
+        view
+        returns (bool)
+    {
+        return
+            keccak256(bytes(adminAuth[_adminWallet])) ==
+            keccak256(bytes(_project));
+    }
+
+    function updateAdmin(address _adminWallet, string memory _project)
+        external
+        onlyAdmin
+    {
+        adminAuth[_adminWallet] = _project;
+    }
+
+    function removeAdmin(address _adminWallet) external onlyAdmin {
+        adminAuth[_adminWallet] = "";
     }
 
     //Making sure only admins can call a certain function
     modifier onlyAdmin() {
-        if (!adminAuth[msg.sender]) revert BetterBounty__NotAdmin();
+        if (keccak256(bytes(adminAuth[msg.sender])) == keccak256(bytes("")))
+            revert BetterBounty__NotAdmin();
         _;
     }
 }

@@ -1,7 +1,6 @@
 import { ethers, upgrades } from "hardhat";
 import "dotenv/config";
 
-import * as betterBountyJson from "../artifacts/contracts/BetterBounty.sol/BetterBounty.json";
 
 async function main() {
   const betterBountyContract = await ethers.getContractFactory("BetterBounty");
