@@ -17,16 +17,20 @@ export class Bounty {
   startedAt: u64;
   project: string;
 
-  constructor(
-    issueId: string,
-    deadline: u64,
-    startedAt: u64,
-    project: string
-  ) {
+  constructor(issueId: string, deadline: u64, startedAt: u64, project: string) {
     this.issueId = issueId;
     this.deadline = deadline;
     this.startedAt = startedAt;
     this.project = project;
+  }
+}
+
+@nearBindgen
+export class MaxWorkers {
+  count: u64;
+
+  constructor(maxWorkers: u64) {
+    this.count = maxWorkers;
   }
 }
 

@@ -6,19 +6,21 @@ import {
   ContractPromiseBatch,
   env,
   context,
+  Storage,
   logging,
+  PersistentSet,
+  storage,
 } from "near-sdk-as";
 
 //Models import
-import { Bounty } from "../models/models";
+import { Bounty, MaxWorkers } from "../models/models";
 
 /* Creating a new PersistentUnorderedMap with the key of type string and the value of type Bounty. 
    That stores all of the bounties in the contract.
 */
 const bounties = new PersistentUnorderedMap<string, Bounty>("BN");
 let adminList = new PersistentUnorderedMap<string, string>("AL");
-
-const MAX_WORKERS = 30;
+let maxWorkers = new PersistentUnorderedMap<string, MaxWorkers>("MW");
 
 /*
  * If the bounty is open, add the attached deposit to the pool and add the attached account to the
@@ -44,8 +46,13 @@ export function fundBounty(
     bounties.set(issueId, newBounty);
   }
 
-  if (bounty != null && bounty.status == "OPEN") {
-    assert((context.blockTimestamp / 1000000000) < u64(bounty.deadline) , "Bounty has expired");
+  if (bounty != null) {
+    assert(bounty.status != "CLOSED", "Bounty is closed");
+
+    assert(
+      context.blockTimestamp / 1000000000 < u64(bounty.deadline),
+      "Bounty has expired"
+    );
 
     // Add the attached deposit to the pool
     bounty.pool = u128.add(bounty.pool, Context.attachedDeposit);
@@ -79,29 +86,33 @@ export function startWork(issueId: string): void {
 
   assert(bounty != null, "Bounty not found");
 
-  if (bounty != null && bounty.status == "OPEN") {
-
-    logging.log((context.blockTimestamp / 1000000000))
-    logging.log((u64(bounty.deadline)))
-
-
-    assert((context.blockTimestamp / 1000000000) < u64(bounty.deadline) , "Bounty has expired");
+  if (bounty != null) {
+    assert(bounty.status != "CLOSED", "Bounty is closed");
 
     assert(
-      bounty.workers.length < MAX_WORKERS,
-      "Max amount of workers for this bounty reached"
+      context.blockTimestamp / 1000000000 < u64(bounty.deadline),
+      "Bounty has expired"
     );
 
-    for (let i = 0; i < bounty.workers.length; i++) {
-      // Preventing the same account from starting multiple work on the same bounty
-      if (bounty.workers[i] == Context.sender) {
-        assert(false, "You are already working on this issue");
+    let maxWorkersCount = getMaxWorkers();
+
+    if (maxWorkersCount) {
+      assert(
+        u64(bounty.workers.length) < u64(maxWorkersCount),
+        "Max amount of workers for this bounty reached"
+      );
+
+      for (let i = 0; i < bounty.workers.length; i++) {
+        // Preventing the same account from starting multiple work on the same bounty
+        if (bounty.workers[i] == Context.sender) {
+          assert(false, "You are already working on this issue");
+        }
+
+        bounty.workers.push(Context.sender);
+
+        bounties.set(issueId, bounty);
       }
     }
-
-    bounty.workers.push(Context.sender);
-
-    bounties.set(issueId, bounty);
   }
 }
 
@@ -190,8 +201,55 @@ export function payoutBounty(
   }
 }
 
-export function deleteBounty(issueId: string): void {
-  bounties.delete(issueId);
+export function getMaxWorkers(): u64 {
+  let maxWorkersCount = maxWorkers.get("maxWorkers");
+
+  if (maxWorkersCount != null) {
+    return maxWorkersCount.count;
+  } else {
+    return u64(30);
+  }
+}
+
+export function setMaxWorkers(max: u64): void {
+  assertAdmin();
+
+  let newMaxWorkerCount = new MaxWorkers(max);
+
+  maxWorkers.set("maxWorkers", newMaxWorkerCount);
+}
+
+export function closeBounty(issueId: string): void {
+  assertAdmin();
+
+  const bounty = bounties.get(issueId);
+
+  assert(bounty != null, "Bounty not found");
+
+  if (bounty != null) {
+    assert(
+      adminList.get(Context.sender) == bounty.project,
+      "Not an admin of this project"
+    );
+
+    bounty.status = "CLOSED";
+
+    bounties.set(issueId, bounty);
+  }
+}
+
+export function expireBounty(issueId: string): void {
+  assertAdmin();
+
+  const bounty = bounties.get(issueId);
+
+  assert(bounty != null, "Bounty not found");
+
+  if (bounty != null) {
+    bounty.status = "EXPIRED";
+
+    bounties.set(issueId, bounty);
+  }
 }
 
 /*
