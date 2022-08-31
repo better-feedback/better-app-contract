@@ -96,23 +96,20 @@ export function startWork(issueId: string): void {
 
     let maxWorkersCount = getMaxWorkers();
 
-    if (maxWorkersCount) {
-      assert(
-        u64(bounty.workers.length) < u64(maxWorkersCount),
-        "Max amount of workers for this bounty reached"
-      );
+    assert(
+      u64(bounty.workers.length) < u64(maxWorkersCount),
+      "Max amount of workers for this bounty reached"
+    );
 
-      for (let i = 0; i < bounty.workers.length; i++) {
-        // Preventing the same account from starting multiple work on the same bounty
-        if (bounty.workers[i] == Context.sender) {
-          assert(false, "You are already working on this issue");
-        }
-
-        bounty.workers.push(Context.sender);
-
-        bounties.set(issueId, bounty);
+    for (let i = 0; i < bounty.workers.length; i++) {
+      // Preventing the same account from starting multiple work on the same bounty
+      if (bounty.workers[i] == Context.sender) {
+        assert(false, "You are already working on this issue");
       }
     }
+
+    bounty.workers.push(Context.sender);
+    bounties.set(issueId, bounty);
   }
 }
 
