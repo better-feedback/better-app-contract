@@ -1,5 +1,5 @@
 # Better Bounty Solidity Contract
-## Deploying the contract
+## Deploying the proxy contract
 In order to deploy the contract make sure you have the follwing in the ```.env``` fıle
 
 ```
@@ -14,6 +14,13 @@ then run the following command:
 npx hardhat run ./scripts/deploy_BetterBounty_V0.1.ts --network mumbai
 ```
 
+## Upgrading the logic contract
+
+After editing your second contract, deploy it and update the proxy on its new address by running
+
+```
+npx hardhat run ./scripts/upgradeToV0.1.ts --network mumbai
+```
 
 ## Verify Contract
 To verify contract make, first get the Contract Address from Polyscan by checking recent transactions
