@@ -21,6 +21,7 @@ import { Bounty, MaxWorkers } from "../models/models";
 const bounties = new PersistentUnorderedMap<string, Bounty>("BN");
 let adminList = new PersistentUnorderedMap<string, string>("AL");
 let maxWorkers = new PersistentUnorderedMap<string, MaxWorkers>("MW");
+let fundersBalance = new PersistentUnorderedMap<string, u128>("FB");
 
 /*
  * If the bounty is open, add the attached deposit to the pool and add the attached account to the
@@ -43,16 +44,12 @@ export function fundBounty(
     const newBounty = new Bounty(issueId, deadline, startedAt, project);
     newBounty.pool = u128.add(newBounty.pool, Context.attachedDeposit);
     newBounty.funders.push(Context.sender);
+    fundersBalance.set(issueId + Context.sender, Context.attachedDeposit);
     bounties.set(issueId, newBounty);
   }
 
   if (bounty != null) {
     assert(bounty.status != "CLOSED", "Bounty is closed");
-
-    assert(
-      context.blockTimestamp / 1000000000 < u64(bounty.deadline),
-      "Bounty has expired"
-    );
 
     // Add the attached deposit to the pool
     bounty.pool = u128.add(bounty.pool, Context.attachedDeposit);
@@ -72,6 +69,7 @@ export function fundBounty(
       bounty.funders.push(Context.sender);
     }
 
+    fundersBalance.set(issueId + Context.sender, Context.attachedDeposit);
     // Update the bounty in the contract
     bounties.set(issueId, bounty);
   }
@@ -88,11 +86,6 @@ export function startWork(issueId: string): void {
 
   if (bounty != null) {
     assert(bounty.status != "CLOSED", "Bounty is closed");
-
-    assert(
-      context.blockTimestamp / 1000000000 < u64(bounty.deadline),
-      "Bounty has expired"
-    );
 
     let maxWorkersCount = getMaxWorkers();
 
@@ -198,6 +191,64 @@ export function payoutBounty(
   }
 }
 
+export function refundFunder(issueId: string, funderWallet: string): void {
+  //Making sure that the caller is an admin
+  assertAdmin();
+
+  assert(env.isValidAccountID(funderWallet), "Invalid worker wallet");
+
+  assert(
+    context.accountBalance > u128.Zero,
+    "You don't have any NEAR to pay out"
+  );
+
+  const bounty = bounties.get(issueId);
+
+  //Making sure that the bounty exists
+  assert(bounty != null, "Bounty not found");
+
+  if (bounty != null) {
+    assert(
+      adminList.get(Context.sender) == bounty.project,
+      "Not an admin of this project"
+    );
+
+    assert(bounty.pool > u128.Zero, "Bounty pool is empty");
+
+    assert(bounty.funders.length > 0, "There are no funders to payout");
+
+    let isFunderFound = false;
+    let funderIndex: i32 = 0;
+
+    for (let i = 0; i < bounty.funders.length; i++) {
+      if (bounty.funders[i] == funderWallet) {
+        isFunderFound = true;
+        funderIndex = i;
+        break;
+      }
+    }
+
+    assert(isFunderFound, "Funder not found");
+
+    //Calculating the amount to pay to the worker
+
+    let amountToPay = fundersBalance.get(issueId + funderWallet);
+    assert(amountToPay != u128.Zero, "Funder balance is zero");
+
+    //Transfering the amount to the worker
+    ContractPromiseBatch.create(funderWallet).transfer(amountToPay!);
+
+    fundersBalance.delete(issueId + funderWallet);
+
+    //Removing the amount from the bounty pool
+    bounty.pool = u128.sub(bounty.pool, amountToPay!);
+    bounty.funders.splice(funderIndex, 1);
+
+    //Updating the bounty in the contract
+    bounties.set(issueId, bounty);
+  }
+}
+
 export function getMaxWorkers(): u64 {
   let maxWorkersCount = maxWorkers.get("maxWorkers");
 
@@ -206,6 +257,10 @@ export function getMaxWorkers(): u64 {
   } else {
     return u64(30);
   }
+}
+
+export function getFundersBountyBalance(issueId: string , fundersWallet : string): u128 {
+  return fundersBalance.get(issueId + fundersWallet)!;
 }
 
 export function setMaxWorkers(max: u64): void {
